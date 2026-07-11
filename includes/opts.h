@@ -9,14 +9,14 @@ constexpr bool ENABLE_LOGS = true; // to debug stuff js keep it disabled for rel
 // if you need any offsets either find them using ida or choose a version from offsets.txt file
 namespace FCurlHookOpts {
     constexpr bool USE_PR = true; // only enable this if ur doing 18.40+
-    constexpr uintptr_t PR_ADDR = 0xFE4C940; // set this to the correct address (processrequest)
-    constexpr uintptr_t GETURL_ADDR = 0x308; // set this to the correct address (geturl its mostly 0x70 until like s25/26+)
-    constexpr uintptr_t SETURL_ADDR = 0xFE4C180; // set this to the correct address (seturl)
+    constexpr uintptr_t PR_ADDR = 0x7c83b34; // set this to the correct address (processrequest)
+    constexpr uintptr_t GETURL_ADDR = 0x1b8; // set this to the correct address (geturl its mostly 0x70 until like s25/26+)
+    constexpr uintptr_t SETURL_ADDR = 0xde4999c; // set this to the correct address (seturl)
 }
 
 namespace EOSFCurlHookOpts {
     constexpr bool USE_EOS = true; // only enable this if ur doing s22+
-    constexpr uintptr_t PR_ADDR = 0x1269074; // set this to the correct address (processrequest)
+    constexpr uintptr_t PR_ADDR = 0x1530e10; // set this to the correct address (processrequest)
     constexpr uintptr_t GETURL_ADDR = 0x178; // set this to the correct address (geturl its 0x178 in almost any build)
-    constexpr uintptr_t SETURL_ADDR = 0x1265A28; // set this to the correct address (seturl)
+    constexpr uintptr_t SETURL_ADDR = 0x152aeb0; // set this to the correct address (seturl)
 }
