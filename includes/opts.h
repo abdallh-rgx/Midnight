@@ -2,7 +2,7 @@
 #include <string>
 #include <cstdint>
 
-constexpr const char* BACKEND_URL = "https://meaningful-whats-redhead-longer.trycloudflare.com";
+constexpr const char* BACKEND_URL = "http://127.0.0.1:3551";
 constexpr bool BYPASS_SSL = true; // only works with curl versions (aka if it doesnt use processrequest i cba bypassing ssl for this)
 constexpr bool ENABLE_LOGS = true; // to debug stuff js keep it disabled for release
 
