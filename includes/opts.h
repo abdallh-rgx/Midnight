@@ -20,3 +20,13 @@ namespace EOSFCurlHookOpts {
     constexpr uintptr_t GETURL_ADDR = 0x178; // set this to the correct address (geturl its 0x178 in almost any build)
     constexpr uintptr_t SETURL_ADDR = 0xFA51D0; // set this to the correct address (seturl)
 }
+
+namespace ExecConsoleCommandOpts {
+    constexpr bool ENABLE = true;
+    constexpr uintptr_t EXEC_ADDR = 0x9BCBC24;
+}
+
+namespace RhiSyncIntervalOpts {
+    constexpr bool ENABLE = true;
+    constexpr int VALUE = 0;
+}
