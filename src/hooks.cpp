@@ -12,6 +12,7 @@
 #include "includes/dobby/dobby.h"
 #include "includes/logger.h"
 #include "includes/opts.h"
+#include "includes/hooks.h"
 
 namespace {
 
@@ -43,7 +44,6 @@ using SetUrlFn = void (*)(void*, const void*);
 using ExecConsoleCommandFn = void (*)(void*, const void*, void*);
 using CurlEasySetOptFn = int (*)(void*, int, void*);
 
-std::atomic<bool> g_install_started{false};
 std::atomic<bool> g_exec_hook_installed{false};
 std::atomic<bool> g_rhi_command_sent{false};
 
@@ -470,8 +470,14 @@ bool InstallCurlHookIfAvailable() {
     return installed;
 }
 
-void* InstallThread(void*) {
-    if (g_install_started.exchange(true)) return nullptr;
+ } // namespace
+
+// Public setup functions called by main.cpp. The previous source only had
+// anonymous-namespace helpers, so these required symbols were never emitted.
+namespace Hooks {
+
+void* FCurlHook::SetupHook(void* handle) {
+    (void)handle;
 
     void* ueBase = nullptr;
     for (int attempt = 0; attempt < 75 && !ueBase; ++attempt) {
@@ -479,38 +485,61 @@ void* InstallThread(void*) {
         if (!ueBase) usleep(200000);
     }
 
-    if (ueBase) {
-        LOGI("Found %s at %p", kUnrealLibrary, ueBase);
-        if (HasExpectedVersionInLibrary(kUnrealLibrary)) {
-            LOGI("Verified target build string: %s", kGameVersion);
-            InstallUEHooks(ueBase);
-
-            void* eosBase = nullptr;
-            for (int attempt = 0; attempt < 75 && !eosBase; ++attempt) {
-                eosBase = GetLibraryBase(kEosLibrary);
-                if (!eosBase) usleep(200000);
-            }
-            if (eosBase) InstallEOSHooks(eosBase);
-            else LOGI("%s not loaded; EOS hook skipped", kEosLibrary);
-        } else {
-            LOGE("Expected build string not found; 22.40 offsets were NOT installed");
-        }
-    } else {
-        LOGE("%s not found; 22.40 ProcessRequest/Exec hooks skipped", kUnrealLibrary);
+    if (!ueBase) {
+        LOGE("%s not found; UE hooks skipped", kUnrealLibrary);
+        return nullptr;
     }
 
-    // Also try the curl path if this build exposes libUE4.so.
-    InstallCurlHookIfAvailable();
+    if (!HasExpectedVersionInLibrary(kUnrealLibrary)) {
+        LOGE("Expected build string not found; 22.40 UE offsets were not installed");
+        return nullptr;
+    }
+
+    LOGI("Verified target build string: %s", kGameVersion);
+    InstallUEHooks(ueBase);
     return nullptr;
 }
 
-} // namespace
+void* EOSFCurlHook::SetupHook(void* handle) {
+    (void)handle;
 
-__attribute__((constructor)) static void OwenHookConstructor() {
-    pthread_t thread{};
-    if (pthread_create(&thread, nullptr, InstallThread, nullptr) == 0) {
-        pthread_detach(thread);
-    } else {
-        LOGE("Failed to create Owen hook installer thread");
+    // Do not apply build-specific EOS offsets until the matching UE build
+    // has been identified in this process.
+    void* ueBase = nullptr;
+    for (int attempt = 0; attempt < 75 && !ueBase; ++attempt) {
+        ueBase = GetLibraryBase(kUnrealLibrary);
+        if (!ueBase) usleep(200000);
     }
+
+    if (!ueBase || !HasExpectedVersionInLibrary(kUnrealLibrary)) {
+        LOGE("Matching 22.40 UE build not found; EOS hook skipped");
+        return nullptr;
+    }
+
+    void* eosBase = nullptr;
+    for (int attempt = 0; attempt < 75 && !eosBase; ++attempt) {
+        eosBase = GetLibraryBase(kEosLibrary);
+        if (!eosBase) usleep(200000);
+    }
+
+    if (!eosBase) {
+        LOGI("%s not loaded; EOS hook skipped", kEosLibrary);
+        return nullptr;
+    }
+
+    InstallEOSHooks(eosBase);
+    return nullptr;
 }
+
+namespace CurlHook {
+void* SetupHook(void* handle) {
+    (void)handle;
+    for (int attempt = 0; attempt < 75; ++attempt) {
+        if (InstallCurlHookIfAvailable()) break;
+        usleep(200000);
+    }
+    return nullptr;
+}
+} // namespace CurlHook
+
+} // namespace Hooks
