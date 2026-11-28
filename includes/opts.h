@@ -4,7 +4,7 @@
 
 constexpr const char* BACKEND_URL = "https://nonprofit-logos-encounter-strategies.trycloudflare.com";
 constexpr bool BYPASS_SSL = true; // only works with curl versions (aka if it doesnt use processrequest i cba bypassing ssl for this)
-constexpr bool ENABLE_LOGS = false; // to debug stuff js keep it disabled for release
+constexpr bool ENABLE_LOGS = true; // to debug stuff js keep it disabled for release
 
 // if you need any offsets either find them using ida or choose a version from offsets.txt file
 namespace FCurlHookOpts {
@@ -23,7 +23,7 @@ namespace EOSFCurlHookOpts {
 
 namespace ExecConsoleCommandOpts {
     constexpr bool ENABLE = true;
-    constexpr uintptr_t EXEC_ADDR = 0x9BCBC24;
+    constexpr uintptr_t EXEC_ADDR = 0xAA59BEC;
 }
 
 namespace RhiSyncIntervalOpts {
