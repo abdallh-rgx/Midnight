@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <cstdint>
-constexpr const char* BACKEND_URL = "http://127.0.0.1:3551";
+constexpr const char* BACKEND_URL = "https://abdallhrgx-loop.hf.space";
 constexpr bool BYPASS_SSL = true; // only works with curl versions (aka if it doesnt use processrequest i cba bypassing ssl for this)
 constexpr bool ENABLE_LOGS = true; // to debug stuff js keep it disabled for release
 #define PACKAGE_NAME "com.epicgames.fortnite1840018167774"
