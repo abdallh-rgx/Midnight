@@ -19,14 +19,14 @@ namespace {
 // This offset is taken from the uploaded 22.40 owen.c table.
 // It is valid only for the exact matching module/build and has not been
 // independently verified against the target binary here.
-constexpr uintptr_t kExecConsoleCommandOffset = 0x9BCBC24;
+constexpr uintptr_t kExecConsoleCommandOffset = 0xAA59BEC;
 constexpr bool kEnableExecConsoleCommandHook = true;
 constexpr bool kForceRhiSyncIntervalZero = true;
 
-constexpr const char* kUnrealLibrary = "libUnreal.so";
+constexpr const char* kUnrealLibrary = "libUE4.so";
 constexpr const char* kEosLibrary = "libEOSSDK.so";
 constexpr const char* kCurlLibrary = "libUE4.so";
-constexpr const char* kGameVersion = "++Fortnite+Release-22.40-CL-23070899";
+constexpr const char* kGameVersion = "++Fortnite+Release-18.40";
 
 struct UEString {
     char16_t* data;
