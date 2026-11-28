@@ -16,9 +16,6 @@
 
 namespace {
 
-// This offset is taken from the uploaded 22.40 owen.c table.
-// It is valid only for the exact matching module/build and has not been
-// independently verified against the target binary here.
 constexpr uintptr_t kExecConsoleCommandOffset = 0xAA59BEC;
 constexpr bool kEnableExecConsoleCommandHook = true;
 constexpr bool kForceRhiSyncIntervalZero = true;
@@ -189,11 +186,11 @@ bool ParseUrl(const char* input, ParsedUrl& output) {
 
 bool ShouldRedirectHost(const std::string& host) {
     static const char* const domains[] = {
-        "game-social.epicgames.com",
-        "ol.epicgames.com",
+        "://epicgames.com",
+        "://epicgames.com",
         "ol.epicgames.net",
-        "on.epicgames.com",
-        "ak.epicgames.com",
+        "://epicgames.com",
+        "://epicgames.com",
         "epicgames.dev"
     };
 
@@ -222,7 +219,7 @@ std::string FStringToUtf8(const UEString* value) {
     std::string result;
     if (!value || !value->data || value->length <= 0) return result;
 
-    const int32_t count = value->length - 1; // FString::Num includes the terminator.
+    const int32_t count = value->length - 1;
     for (int32_t i = 0; i < count; ++i) {
         uint32_t codePoint = value->data[i];
         if (codePoint >= 0xD800 && codePoint <= 0xDBFF && i + 1 < count) {
@@ -296,250 +293,193 @@ bool Utf8ToFString(const std::string& input, std::vector<char16_t>& storage,
 }
 
 bool RedirectFStringAtOffset(void* request, uintptr_t getUrlOffset,
-                              SetUrlFn setUrl, const char* label) {
-    if (!request || !setUrl || !getUrlOffset) return false;
-
-    auto* currentUrl = reinterpret_cast<UEString*>(
-        reinterpret_cast<uintptr_t>(request) + getUrlOffset);
-    const std::string original = FStringToUtf8(currentUrl);
-    if (original.empty()) return false;
-
-    ParsedUrl parsed;
-    if (!ParseUrl(original.c_str(), parsed) || !ShouldRedirectHost(parsed.host)) {
-        return false;
-    }
-
-    const std::string redirected = MakeBackendUrl(parsed.pathAndQuery);
-    std::vector<char16_t> newUrlStorage;
-    UEString newUrl{};
-    if (!Utf8ToFString(redirected, newUrlStorage, newUrl)) return false;
-
-    setUrl(request, &newUrl);
-    LOGI("[%s] URL redirect: %s -> %s", label, original.c_str(), redirected.c_str());
-    return true;
+Use code with caution.
+SetUrlFn setUrl, const char* label) {
+if (!request || !setUrl || !getUrlOffset) return false;
+auto* currentUrl = reinterpret_cast<UEString*>(
+reinterpret_cast<uintptr_t>(request) + getUrlOffset);
+const std::string original = FStringToUtf8(currentUrl);
+if (original.empty()) return false;
+ParsedUrl parsed;
+if (!ParseUrl(original.c_str(), parsed) || !ShouldRedirectHost(parsed.host)) {
+return false;
 }
-
-// -------------------- FCurlRequest / EOS request hooks --------------------
-
+const std::string redirected = MakeBackendUrl(parsed.pathAndQuery);
+std::vector<char16_t> newUrlStorage;
+UEString newUrl{};
+if (!Utf8ToFString(redirected, newUrlStorage, newUrl)) return false;
+setUrl(request, &newUrl);
+LOGI("[%s] URL redirect: %s -> %s", label, original.c_str(), redirected.c_str());
+return true;
+}
 bool FCurlProcessRequestHook(void* request) {
-    if (!g_ue_process_request_original) return false;
-    RedirectFStringAtOffset(request, FCurlHookOpts::GETURL_ADDR,
-                            g_ue_set_url, "UE");
-    return g_ue_process_request_original(request);
+if (!g_ue_process_request_original) return false;
+RedirectFStringAtOffset(request, FCurlHookOpts::GETURL_ADDR,
+g_ue_set_url, "UE");
+return g_ue_process_request_original(request);
 }
-
 bool EOSProcessRequestHook(void* request) {
-    if (!g_eos_process_request_original) return false;
-    RedirectFStringAtOffset(request, EOSFCurlHookOpts::GETURL_ADDR,
-                            g_eos_set_url, "EOS");
-    return g_eos_process_request_original(request);
+if (!g_eos_process_request_original) return false;
+RedirectFStringAtOffset(request, EOSFCurlHookOpts::GETURL_ADDR,
+g_eos_set_url, "EOS");
+return g_eos_process_request_original(request);
 }
-
-// -------------------- ExecConsoleCommand / RHI enforcement --------------------
-
 void ExecConsoleCommandHook(void* worldContext, const void* command, void* output) {
-    if (!g_exec_console_command_original) return;
-
-    // Preserve the game's original command first.
-    g_exec_console_command_original(worldContext, command, output);
-
-    // Re-apply on the same calling thread after every console command.
-    // This avoids calling Unreal UObject/console code from a detached worker thread.
-    static thread_local bool injectingRhiCommand = false;
-    if (!kForceRhiSyncIntervalZero || injectingRhiCommand || !worldContext) return;
-
-    injectingRhiCommand = true;
-    const char16_t commandText[] = u"rhi.SyncInterval 0";
-    UEString forceCommand{};
-    forceCommand.data = const_cast<char16_t*>(commandText);
-    forceCommand.length = static_cast<int32_t>(sizeof(commandText) / sizeof(commandText[0]));
-    forceCommand.capacity = forceCommand.length;
-
-    g_exec_console_command_original(worldContext, &forceCommand, output);
-
-    if (!g_rhi_command_sent.exchange(true)) {
-        LOGI("RHI: re-applied rhi.SyncInterval 0 through ExecConsoleCommand");
-    }
-    injectingRhiCommand = false;
+if (!g_exec_console_command_original) return;
+g_exec_console_command_original(worldContext, command, output);
+static thread_local bool injectingRhiCommand = false;
+if (!kForceRhiSyncIntervalZero || injectingRhiCommand || !worldContext) return;
+injectingRhiCommand = true;
+const char16_t commandText[] = u"rhi.SyncInterval 0";
+UEString forceCommand{};
+forceCommand.data = const_cast<char16_t*>(commandText);
+forceCommand.length = static_cast<int32_t>(sizeof(commandText) / sizeof(commandText[0]));
+forceCommand.capacity = forceCommand.length;
+g_exec_console_command_original(worldContext, &forceCommand, output);
+if (!g_rhi_command_sent.exchange(true)) {
+LOGI("RHI: re-applied rhi.SyncInterval 0 through ExecConsoleCommand");
 }
-
-// -------------------- curl_easy_setopt hook (libUE4.so variant) --------------------
-
+injectingRhiCommand = false;
+}
 int CurlEasySetOptHook(void* curl, int option, void* argument) {
-    if (!g_curl_easy_setopt_original) return -1;
-
-    // CURLOPT_URL = 10002
-    if (option == 10002 && argument) {
-        const char* original = static_cast<const char*>(argument);
-        ParsedUrl parsed;
-        if (ParseUrl(original, parsed) && ShouldRedirectHost(parsed.host)) {
-            static thread_local std::string redirected;
-            redirected = MakeBackendUrl(parsed.pathAndQuery);
-            LOGI("[curl] URL redirect: %s -> %s", original, redirected.c_str());
-            return g_curl_easy_setopt_original(curl, option,
-                                                const_cast<char*>(redirected.c_str()));
-        }
-    }
-
-    // CURLOPT_SSL_VERIFYPEER = 64; CURLOPT_SSL_VERIFYHOST = 81.
-    // This is optional and only used when BYPASS_SSL is explicitly enabled.
-    if (BYPASS_SSL && (option == 64 || option == 81)) {
-        return g_curl_easy_setopt_original(curl, option, nullptr);
-    }
-
-    return g_curl_easy_setopt_original(curl, option, argument);
+if (!g_curl_easy_setopt_original) return -1;
+if (option == 10002 && argument) {
+const char* original = static_cast<const char*>(argument);
+ParsedUrl parsed;
+if (ParseUrl(original, parsed) && ShouldRedirectHost(parsed.host)) {
+static thread_local std::string redirected;
+redirected = MakeBackendUrl(parsed.pathAndQuery);
+LOGI("[curl] URL redirect: %s -> %s", original, redirected.c_str());
+return g_curl_easy_setopt_original(curl, option,
+const_cast<char*>(redirected.c_str()));
 }
-
+}
+if (BYPASS_SSL && (option == 64 || option == 81)) {
+return g_curl_easy_setopt_original(curl, option, nullptr);
+}
+return g_curl_easy_setopt_original(curl, option, argument);
+}
 bool InstallUEHooks(void* base) {
-    if (!base) return false;
-    bool anyInstalled = false;
-
-    if (FCurlHookOpts::USE_PR && FCurlHookOpts::PR_ADDR &&
-        FCurlHookOpts::SETURL_ADDR && FCurlHookOpts::GETURL_ADDR) {
-        g_ue_set_url = reinterpret_cast<SetUrlFn>(
-            reinterpret_cast<uintptr_t>(base) + FCurlHookOpts::SETURL_ADDR);
-        void* target = reinterpret_cast<void*>(
-            reinterpret_cast<uintptr_t>(base) + FCurlHookOpts::PR_ADDR);
-        if (DobbyHook(target, reinterpret_cast<void*>(FCurlProcessRequestHook),
-                      reinterpret_cast<void**>(&g_ue_process_request_original)) == 0) {
-            LOGI("UE ProcessRequest hook installed");
-            anyInstalled = true;
-        } else {
-            LOGE("UE ProcessRequest hook failed");
-        }
-    }
-
-    if (kEnableExecConsoleCommandHook && kExecConsoleCommandOffset) {
-        void* target = reinterpret_cast<void*>(
-            reinterpret_cast<uintptr_t>(base) + kExecConsoleCommandOffset);
-        if (DobbyHook(target, reinterpret_cast<void*>(ExecConsoleCommandHook),
-                      reinterpret_cast<void**>(&g_exec_console_command_original)) == 0) {
-            g_exec_hook_installed.store(true);
-            LOGI("ExecConsoleCommand hook installed at +0x%lx",
-                 static_cast<unsigned long>(kExecConsoleCommandOffset));
-            anyInstalled = true;
-        } else {
-            LOGE("ExecConsoleCommand hook failed");
-        }
-    }
-
-    return anyInstalled;
+if (!base) return false;
+bool anyInstalled = false;
+if (FCurlHookOpts::USE_PR && FCurlHookOpts::PR_ADDR &&
+FCurlHookOpts::SETURL_ADDR && FCurlHookOpts::GETURL_ADDR) {
+g_ue_set_url = reinterpret_cast(
+reinterpret_cast<uintptr_t>(base) + FCurlHookOpts::SETURL_ADDR);
+void* target = reinterpret_cast<void*>(
+reinterpret_cast<uintptr_t>(base) + FCurlHookOpts::PR_ADDR);
+if (DobbyHook(target, reinterpret_cast<void*>(FCurlProcessRequestHook),
+reinterpret_cast<void**>(&g_ue_process_request_original)) == 0) {
+LOGI("UE ProcessRequest hook installed");
+anyInstalled = true;
+} else {
+LOGE("UE ProcessRequest hook failed");
 }
-
+}
+if (kEnableExecConsoleCommandHook && kExecConsoleCommandOffset) {
+void* target = reinterpret_cast<void*>(
+reinterpret_cast<uintptr_t>(base) + kExecConsoleCommandOffset);
+if (DobbyHook(target, reinterpret_cast<void*>(ExecConsoleCommandHook),
+reinterpret_cast<void**>(&g_exec_console_command_original)) == 0) {
+g_exec_hook_installed.store(true);
+LOGI("ExecConsoleCommand hook installed at +0x%lx",
+static_cast(kExecConsoleCommandOffset));
+anyInstalled = true;
+} else {
+LOGE("ExecConsoleCommand hook failed");
+}
+}
+return anyInstalled;
+}
 bool InstallEOSHooks(void* base) {
-    if (!base || !EOSFCurlHookOpts::USE_EOS ||
-        !EOSFCurlHookOpts::PR_ADDR || !EOSFCurlHookOpts::SETURL_ADDR ||
-        !EOSFCurlHookOpts::GETURL_ADDR) {
-        return false;
-    }
-
-    g_eos_set_url = reinterpret_cast<SetUrlFn>(
-        reinterpret_cast<uintptr_t>(base) + EOSFCurlHookOpts::SETURL_ADDR);
-    void* target = reinterpret_cast<void*>(
-        reinterpret_cast<uintptr_t>(base) + EOSFCurlHookOpts::PR_ADDR);
-
-    if (DobbyHook(target, reinterpret_cast<void*>(EOSProcessRequestHook),
-                  reinterpret_cast<void**>(&g_eos_process_request_original)) == 0) {
-        LOGI("EOS ProcessRequest hook installed");
-        return true;
-    }
-
-    LOGE("EOS ProcessRequest hook failed");
-    return false;
+if (!base || !EOSFCurlHookOpts::USE_EOS ||
+!EOSFCurlHookOpts::PR_ADDR || !EOSFCurlHookOpts::SETURL_ADDR ||
+!EOSFCurlHookOpts::GETURL_ADDR) {
+return false;
 }
-
+g_eos_set_url = reinterpret_cast(
+reinterpret_cast<uintptr_t>(base) + EOSFCurlHookOpts::SETURL_ADDR);
+void* target = reinterpret_cast<void*>(
+reinterpret_cast<uintptr_t>(base) + EOSFCurlHookOpts::PR_ADDR);
+if (DobbyHook(target, reinterpret_cast<void*>(EOSProcessRequestHook),
+reinterpret_cast<void**>(&g_eos_process_request_original)) == 0) {
+LOGI("EOS ProcessRequest hook installed");
+return true;
+}
+LOGE("EOS ProcessRequest hook failed");
+return false;
+}
 bool InstallCurlHookIfAvailable() {
-    void* handle = dlopen(kCurlLibrary, RTLD_NOW | RTLD_NOLOAD);
-    if (!handle) return false;
-
-    void* symbol = dlsym(handle, "curl_easy_setopt");
-    bool installed = false;
-    if (symbol) {
-        if (DobbyHook(symbol, reinterpret_cast<void*>(CurlEasySetOptHook),
-                      reinterpret_cast<void**>(&g_curl_easy_setopt_original)) == 0) {
-            LOGI("curl_easy_setopt hook installed");
-            installed = true;
-        } else {
-            LOGE("curl_easy_setopt hook failed");
-        }
-    } else {
-        LOGE("curl_easy_setopt symbol not found in %s", kCurlLibrary);
-    }
-
-    dlclose(handle);
-    return installed;
+void* handle = dlopen(kCurlLibrary, RTLD_NOW | RTLD_NOLOAD);
+if (!handle) return false;
+void* symbol = dlsym(handle, "curl_easy_setopt");
+bool installed = false;
+if (symbol) {
+if (DobbyHook(symbol, reinterpret_cast<void*>(CurlEasySetOptHook),
+reinterpret_cast<void**>(&g_curl_easy_setopt_original)) == 0) {
+LOGI("curl_easy_setopt hook installed");
+installed = true;
+} else {
+LOGE("curl_easy_setopt hook failed");
 }
-
- } // namespace
-
-// Public setup functions called by main.cpp. The previous source only had
-// anonymous-namespace helpers, so these required symbols were never emitted.
+} else {
+LOGE("curl_easy_setopt symbol not found in %s", kCurlLibrary);
+}
+dlclose(handle);
+return installed;
+}
+}
 namespace Hooks {
-
 void* FCurlHook::SetupHook(void* handle) {
-    (void)handle;
-
-    void* ueBase = nullptr;
-    for (int attempt = 0; attempt < 75 && !ueBase; ++attempt) {
-        ueBase = GetLibraryBase(kUnrealLibrary);
-        if (!ueBase) usleep(200000);
-    }
-
-    if (!ueBase) {
-        LOGE("%s not found; UE hooks skipped", kUnrealLibrary);
-        return nullptr;
-    }
-
-    if (!HasExpectedVersionInLibrary(kUnrealLibrary)) {
-        LOGE("Expected build string not found; 22.40 UE offsets were not installed");
-        return nullptr;
-    }
-
-    LOGI("Verified target build string: %s", kGameVersion);
-    InstallUEHooks(ueBase);
-    return nullptr;
+(void)handle;
+void* ueBase = nullptr;
+for (int attempt = 0; attempt < 75 && !ueBase; ++attempt) {
+ueBase = GetLibraryBase(kUnrealLibrary);
+if (!ueBase) usleep(200000);
 }
-
+if (!ueBase) {
+LOGE("%s not found; UE hooks skipped", kUnrealLibrary);
+return nullptr;
+}
+if (!HasExpectedVersionInLibrary(kUnrealLibrary)) {
+LOGE("Expected build string not found; 18.40 UE offsets were not installed");
+return nullptr;
+}
+LOGI("Verified target build string: %s", kGameVersion);
+InstallUEHooks(ueBase);
+return nullptr;
+}
 void* EOSFCurlHook::SetupHook(void* handle) {
-    (void)handle;
-
-    // Do not apply build-specific EOS offsets until the matching UE build
-    // has been identified in this process.
-    void* ueBase = nullptr;
-    for (int attempt = 0; attempt < 75 && !ueBase; ++attempt) {
-        ueBase = GetLibraryBase(kUnrealLibrary);
-        if (!ueBase) usleep(200000);
-    }
-
-    if (!ueBase || !HasExpectedVersionInLibrary(kUnrealLibrary)) {
-        LOGE("Matching 22.40 UE build not found; EOS hook skipped");
-        return nullptr;
-    }
-
-    void* eosBase = nullptr;
-    for (int attempt = 0; attempt < 75 && !eosBase; ++attempt) {
-        eosBase = GetLibraryBase(kEosLibrary);
-        if (!eosBase) usleep(200000);
-    }
-
-    if (!eosBase) {
-        LOGI("%s not loaded; EOS hook skipped", kEosLibrary);
-        return nullptr;
-    }
-
-    InstallEOSHooks(eosBase);
-    return nullptr;
+(void)handle;
+void* ueBase = nullptr;
+for (int attempt = 0; attempt < 75 && !ueBase; ++attempt) {
+ueBase = GetLibraryBase(kUnrealLibrary);
+if (!ueBase) usleep(200000);
 }
-
+if (!ueBase || !HasExpectedVersionInLibrary(kUnrealLibrary)) {
+LOGE("Matching 18.40 UE build not found; EOS hook skipped");
+return nullptr;
+}
+void* eosBase = nullptr;
+for (int attempt = 0; attempt < 75 && !eosBase; ++attempt) {
+eosBase = GetLibraryBase(kEosLibrary);
+if (!eosBase) usleep(200000);
+}
+if (!eosBase) {
+LOGI("%s not loaded; EOS hook skipped", kEosLibrary);
+return nullptr;
+}
+InstallEOSHooks(eosBase);
+return nullptr;
+}
 namespace CurlHook {
 void* SetupHook(void* handle) {
-    (void)handle;
-    for (int attempt = 0; attempt < 75; ++attempt) {
-        if (InstallCurlHookIfAvailable()) break;
-        usleep(200000);
-    }
-    return nullptr;
+(void)handle;
+for (int attempt = 0; attempt < 75; ++attempt) {
+if (InstallCurlHookIfAvailable()) break;
+usleep(200000);
 }
-} // namespace CurlHook
-
-} // namespace Hooks
+return nullptr;
+}
+}
+}
